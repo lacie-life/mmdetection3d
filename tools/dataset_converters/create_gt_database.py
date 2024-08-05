@@ -153,13 +153,13 @@ def create_groundtruth_database(dataset_class_name,
                 use_lidar=True,
                 use_camera=with_mask,
             ),
-            data_prefix=dict(
-                pts='training/velodyne_reduced', img='training/image_2'),
+            # data_prefix=dict(
+            #     pts='training/velodyne_reduced', img='training/image_2'),
             pipeline=[
                 dict(
                     type='LoadPointsFromFile',
                     coord_type='LIDAR',
-                    load_dim=4,
+                    load_dim=5,
                     use_dim=4,
                     backend_args=backend_args),
                 dict(

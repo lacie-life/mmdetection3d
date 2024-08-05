@@ -12,7 +12,7 @@ from mmdet3d.structures.ops import box_np_ops
 from .kitti_data_utils import WaymoInfoGatherer, get_kitti_image_info
 from .nuscenes_converter import post_process_coords
 
-kitti_categories = ('Pedestrian', 'Cyclist', 'Car')
+kitti_categories = ('CAR', 'WHEELER', 'PEDESTRIAN')
 
 
 def convert_to_kitti_info_version2(info):
@@ -43,7 +43,7 @@ def convert_to_kitti_info_version2(info):
 def _read_imageset_file(path):
     with open(path, 'r') as f:
         lines = f.readlines()
-    return [int(line) for line in lines]
+    return [line.strip() for line in lines]
 
 
 class _NumPointsInGTCalculater:
@@ -66,7 +66,7 @@ class _NumPointsInGTCalculater:
                  data_path,
                  relative_path,
                  remove_outside=True,
-                 num_features=4,
+                 num_features=5,
                  num_worker=8) -> None:
         self.data_path = data_path
         self.relative_path = relative_path
@@ -85,12 +85,18 @@ class _NumPointsInGTCalculater:
         points_v = np.fromfile(
             v_path, dtype=np.float32,
             count=-1).reshape([-1, self.num_features])
+        
         rect = calib['R0_rect']
         Trv2c = calib['Tr_velo_to_cam']
         P2 = calib['P2']
-        if self.remove_outside:
-            points_v = box_np_ops.remove_outside_points(
-                points_v, rect, Trv2c, P2, image_info['image_shape'])
+        
+        # if self.remove_outside:
+        #     print('remove_outside')
+        #     print(points_v.shape)
+        #     points_v = box_np_ops.remove_outside_points(
+        #         points_v, rect, Trv2c, P2, image_info['image_shape'])
+        #     print(points_v.shape)
+
         annos = info['annos']
         num_obj = len([n for n in annos['name'] if n != 'DontCare'])
         dims = annos['dimensions'][:num_obj]
@@ -119,7 +125,7 @@ def _calculate_num_points_in_gt(data_path,
                                 infos,
                                 relative_path,
                                 remove_outside=True,
-                                num_features=4):
+                                num_features=5):
     for info in mmengine.track_iter_progress(infos):
         pc_info = info['point_cloud']
         image_info = info['image']
@@ -128,14 +134,20 @@ def _calculate_num_points_in_gt(data_path,
             v_path = str(Path(data_path) / pc_info['velodyne_path'])
         else:
             v_path = pc_info['velodyne_path']
+        
         points_v = np.fromfile(
             v_path, dtype=np.float32, count=-1).reshape([-1, num_features])
+        
         rect = calib['R0_rect']
         Trv2c = calib['Tr_velo_to_cam']
         P2 = calib['P2']
-        if remove_outside:
-            points_v = box_np_ops.remove_outside_points(
-                points_v, rect, Trv2c, P2, image_info['image_shape'])
+        
+        # if remove_outside:
+        #     print('remove_outside')
+        #     print(points_v.shape)
+        #     points_v = box_np_ops.remove_outside_points(
+        #         points_v, rect, Trv2c, P2, image_info['image_shape'])
+        #     print(points_v.shape)
 
         # points_v = points_v[points_v[:, 0] > 0]
         annos = info['annos']
@@ -186,6 +198,7 @@ def create_kitti_info_file(data_path,
         save_path = Path(data_path)
     else:
         save_path = Path(save_path)
+    
     kitti_infos_train = get_kitti_image_info(
         data_path,
         training=True,
@@ -194,10 +207,12 @@ def create_kitti_info_file(data_path,
         with_plane=with_plane,
         image_ids=train_img_ids,
         relative_path=relative_path)
+    
     _calculate_num_points_in_gt(data_path, kitti_infos_train, relative_path)
     filename = save_path / f'{pkl_prefix}_infos_train.pkl'
     print(f'Kitti info train file is saved to {filename}')
     mmengine.dump(kitti_infos_train, filename)
+    
     kitti_infos_val = get_kitti_image_info(
         data_path,
         training=True,
@@ -206,6 +221,7 @@ def create_kitti_info_file(data_path,
         with_plane=with_plane,
         image_ids=val_img_ids,
         relative_path=relative_path)
+    
     _calculate_num_points_in_gt(data_path, kitti_infos_val, relative_path)
     filename = save_path / f'{pkl_prefix}_infos_val.pkl'
     print(f'Kitti info val file is saved to {filename}')
@@ -308,7 +324,7 @@ def _create_reduced_point_cloud(data_path,
                                 info_path,
                                 save_path=None,
                                 back=False,
-                                num_features=4,
+                                num_features=5,
                                 front_camera_id=2):
     """Create reduced point clouds for given info.
 
@@ -331,24 +347,44 @@ def _create_reduced_point_cloud(data_path,
         calib = info['calib']
 
         v_path = pc_info['velodyne_path']
+        
+        # print("Creating reduced point cloud for: ")
+        # print(v_path)
         v_path = Path(data_path) / v_path
+        # print(v_path)
+
         points_v = np.fromfile(
             str(v_path), dtype=np.float32,
             count=-1).reshape([-1, num_features])
+        
         rect = calib['R0_rect']
+        
         if front_camera_id == 2:
             P2 = calib['P2']
         else:
             P2 = calib[f'P{str(front_camera_id)}']
+        
         Trv2c = calib['Tr_velo_to_cam']
+        
         # first remove z < 0 points
         # keep = points_v[:, -1] > 0
         # points_v = points_v[keep]
         # then remove outside.
+        
         if back:
             points_v[:, 0] = -points_v[:, 0]
-        points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
-                                                    image_info['image_shape'])
+
+        # print('remove_outside')
+        # print(points_v.shape)
+        # points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
+        #                                             image_info['image_shape'])
+
+        # Remove points outside the image
+        # Project the points to the image plane
+        
+
+        # print(points_v.shape)
+
         if save_path is None:
             save_dir = v_path.parent.parent / (v_path.parent.stem + '_reduced')
             if not save_dir.exists():
@@ -397,10 +433,13 @@ def create_reduced_point_cloud(data_path,
 
     print('create reduced point cloud for training set')
     _create_reduced_point_cloud(data_path, train_info_path, save_path)
+    
     print('create reduced point cloud for validation set')
     _create_reduced_point_cloud(data_path, val_info_path, save_path)
+    
     print('create reduced point cloud for testing set')
     _create_reduced_point_cloud(data_path, test_info_path, save_path)
+    
     if with_back:
         _create_reduced_point_cloud(
             data_path, train_info_path, save_path, back=True)

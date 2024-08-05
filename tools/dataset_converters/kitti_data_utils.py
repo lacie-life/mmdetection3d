@@ -9,12 +9,101 @@ import numpy as np
 from PIL import Image
 from skimage import io
 
+lidar2ego = np.asarray(
+    [
+        [0.99011437, -0.13753536, -0.02752358, 2.3728100375737995],
+        [0.13828977, 0.99000475, 0.02768645, -16.19297517556697],
+        [0.02344061, -0.03121898, 0.99923766, -8.620000000000005],
+        [0.0, 0.0, 0.0, 1.0],
+    ],
+    dtype=np.float32,
+)[:-1, :]
+
+lidar2south1 = np.asarray(
+    [
+        [7.04216073e02, -1.37317442e03, -4.32235765e02, -2.03369364e04],
+        [-9.28351327e01, -1.77543929e01, -1.45629177e03, 9.80290034e02],
+        [8.71736000e-01, -9.03453000e-02, -4.81574000e-01, -2.58546000e00],
+    ],
+    dtype=np.float32,
+)
+
+lidar2south2 = np.asarray(
+    [
+        [1546.63215008, -436.92407115, -295.58362676, 1319.79271737],
+        [93.20805656, 47.90351592, -1482.13403199, 687.84781276],
+        [0.73326062, 0.59708904, -0.32528854, -1.30114325],
+    ],
+    dtype=np.float32,
+)
+
+south1_intrinsic = np.asarray(
+    [
+        [1400.3096617691212, 0.0, 967.7899705163408],
+        [0.0, 1403.041082755918, 581.7195041357244],
+        [0.0, 0.0, 1.0],
+    ],
+    dtype=np.float32,
+)
+
+south12ego = np.asarray(
+    [
+        [-0.06377762, -0.91003007, 0.15246652, -10.409943],
+        [-0.41296193, -0.10492031, -0.8399004, -16.2729],
+        [0.8820865, -0.11257353, -0.45447016, -11.557314],
+        [0.0, 0.0, 0.0, 1.0],
+    ],
+    dtype=np.float32,
+)[:-1, :]
+
+south12lidar = np.asarray(
+    [
+        [-0.10087585, -0.51122875, 0.88484734, 1.90816304],
+        [-1.0776537, 0.03094424, -0.10792235, -14.05913251],
+        [0.01956882, -0.93122171, -0.45454375, 0.72290242],
+        [0.0, 0.0, 0.0, 1.0],
+    ],
+    dtype=np.float32,
+)[:-1, :]
+
+south2_intrinsic = np.asarray(
+    [
+        [1029.2795655594014, 0.0, 982.0311857478633],
+        [0.0, 1122.2781391971948, 1129.1480997238505],
+        [0.0, 0.0, 1.0],
+    ],
+    dtype=np.float32,
+)
+
+south22ego = np.asarray(
+    [
+        [0.650906, -0.7435749, 0.15303044, 4.6059465],
+        [-0.14764456, -0.32172203, -0.935252, -15.00049],
+        [0.74466264, 0.5861663, -0.3191956, -9.351643],
+        [0.0, 0.0, 0.0, 1.0],
+    ],
+    dtype=np.float32,
+)[:-1, :]
+
+south22lidar = np.asarray(
+    [
+        [0.49709212, -0.19863714, 0.64202357, -0.03734614],
+        [-0.60406415, -0.17852863, 0.50214409, 2.52095055],
+        [0.01173726, -0.77546627, -0.70523436, 0.54322305],
+        [0.0, 0.0, 0.0, 1.0],
+    ],
+    dtype=np.float32,
+)[:-1, :]
+
 
 def get_image_index_str(img_idx, use_prefix_id=False):
+    type_lidar = img_idx[-5:]
     if use_prefix_id:
-        return '{:07d}'.format(img_idx)
+        img_idx = type_lidar + "/" + img_idx
+        return str(img_idx)
     else:
-        return '{:06d}'.format(img_idx)
+        img_idx = type_lidar + "/" + img_idx
+        return str(img_idx)
 
 
 def get_kitti_info_path(idx,
@@ -31,7 +120,7 @@ def get_kitti_info_path(idx,
     if training:
         file_path = Path('training') / info_type / img_idx_str
     else:
-        file_path = Path('testing') / info_type / img_idx_str
+        file_path = Path('training') / info_type / img_idx_str
     if exist_check and not (prefix / file_path).exists():
         raise ValueError('file not exist: {}'.format(file_path))
     if relative_path:
@@ -46,7 +135,7 @@ def get_image_path(idx,
                    relative_path=True,
                    exist_check=True,
                    info_type='image_2',
-                   file_tail='.png',
+                   file_tail='.jpg',
                    use_prefix_id=False):
     return get_kitti_info_path(idx, prefix, info_type, file_tail, training,
                                relative_path, exist_check, use_prefix_id)
@@ -236,9 +325,9 @@ def get_kitti_image_info(path,
                 idx, path, training, relative_path=False)
             with open(calib_path, 'r') as f:
                 lines = f.readlines()
-            P0 = np.array([float(info) for info in lines[0].split(' ')[1:13]
+            P0 = np.array([float(info) for info in lines[2].split(' ')[1:13]
                            ]).reshape([3, 4])
-            P1 = np.array([float(info) for info in lines[1].split(' ')[1:13]
+            P1 = np.array([float(info) for info in lines[3].split(' ')[1:13]
                            ]).reshape([3, 4])
             P2 = np.array([float(info) for info in lines[2].split(' ')[1:13]
                            ]).reshape([3, 4])
@@ -263,17 +352,94 @@ def get_kitti_image_info(path,
                 float(info) for info in lines[5].split(' ')[1:13]
             ]).reshape([3, 4])
             Tr_imu_to_velo = np.array([
-                float(info) for info in lines[6].split(' ')[1:13]
+                float(info) for info in lines[5].split(' ')[1:13]
             ]).reshape([3, 4])
             if extend_matrix:
                 Tr_velo_to_cam = _extend_matrix(Tr_velo_to_cam)
                 Tr_imu_to_velo = _extend_matrix(Tr_imu_to_velo)
+            
+            # Check prefix for calib
+            # print('idx:', idx)
+            # print('path:', path)
+            # print('calib_path:', calib_path)
+
+            camera_type = idx[0:6]
+            lidar_type = idx[-5:]
+            # print('camera_type:', camera_type)
+            # print('lidar_type:', lidar_type)
+
+            R0_tmp = np.eye(4)
+            Tr_v2cam_tmp = None
+            cam_intrinsic = None
+
+            if camera_type == 'south1':
+                # cam_intrinsic = south1_intrinsic
+
+                if lidar_type == 'south':
+                    cam_intrinsic = np.array([
+                        [7.04216073e02, -1.37317442e03, -4.32235765e02, -2.03369364e04],
+                        [-9.28351327e01, -1.77543929e01, -1.45629177e03, 9.80290034e02],
+                        [8.71736000e-01, -9.03453000e-02, -4.81574000e-01, -2.58546000e00],
+                    ])
+                    Tr_v2cam_tmp = np.array(
+                        [[-0.0931837, -0.995484, 0.018077, -13.8309],
+                         [-0.481033, 0.029117, -0.876219, 1.96067],
+                         [0.871736, -0.0903453, -0.481574, -2.58546],
+                         [0.0, 0.0, 0.0, 1.0]
+                         ]
+                    )
+                elif lidar_type == 'north':
+                    cam_intrinsic = np.array(
+                        [[2.90064402e+02, -1.52265886e+03, -4.17082935e+02, -3.98031250e+02],
+                         [-8.89628396e+01, 6.86258619e+00, -1.45178013e+03, 4.54220718e+02],
+                         [8.18463845e-01, -3.28184922e-01, -4.71605571e-01, -1.82577035e-01]]
+                    )
+                    Tr_v2cam_tmp = np.array(
+                        [[-0.374855, -0.926815, 0.0222604, -0.284537],
+                         [-0.465575, 0.167432, -0.869026, 0.683219],
+                         [0.8017, -0.336123, -0.494264, -0.837352],
+                         [0.0, 0.0, 0.0, 1.0]
+                         ]
+                    )
+                else:
+                    raise ValueError('Invalid lidar type')
+            elif camera_type == 'south2':
+                # cam_intrinsic = south2_intrinsic
+
+                if lidar_type == 'south':
+                    cam_intrinsic = np.array(
+                        [[1318.95273325, -859.15213894, -289.13390611, 11272.03223502],
+                         [90.01799314, -2.9727517, -1445.63809767, 585.78988153],
+                         [0.876766, 0.344395, -0.335669, -7.26891]])
+                    Tr_v2cam_tmp = np.array(
+                        [[0.641509, -0.766975, 0.0146997, 1.99131],
+                         [-0.258939, -0.234538, -0.936986, 1.21464],
+                         [0.722092, 0.597278, -0.349058, -1.50021],
+                         [0.0, 0.0, 0.0, 1.0]]
+                    )
+                elif lidar_type == 'north':
+                    cam_intrinsic = np.array(
+                        [[1.31895273e+03, -8.59152139e+02, -2.89133906e+02, 1.12720322e+04],
+                         [9.00179931e+01, -2.97275170e+00, -1.44563810e+03, 5.85789882e+02],
+                         [8.76766000e-01, 3.44395000e-01, -3.35669000e-01, -7.26891000e+00]]
+                    )
+                    Tr_v2cam_tmp = np.array(
+                        [[0.37383, -0.927155, 0.0251845, 14.2181],
+                         [-0.302544, -0.147564, -0.941643, 3.50648],
+                         [0.876766, 0.344395, -0.335669, -7.26891],
+                         [0.0, 0.0, 0.0, 1.0]
+                         ]
+                    )
+                else:
+                    raise ValueError('Invalid lidar type')
+
+            
             calib_info['P0'] = P0
             calib_info['P1'] = P1
-            calib_info['P2'] = P2
+            calib_info['P2'] = cam_intrinsic
             calib_info['P3'] = P3
-            calib_info['R0_rect'] = rect_4x4
-            calib_info['Tr_velo_to_cam'] = Tr_velo_to_cam
+            calib_info['R0_rect'] = R0_tmp
+            calib_info['Tr_velo_to_cam'] = Tr_v2cam_tmp
             calib_info['Tr_imu_to_velo'] = Tr_imu_to_velo
             info['calib'] = calib_info
 

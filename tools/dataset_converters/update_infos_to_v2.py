@@ -390,6 +390,7 @@ def update_nuscenes_infos(pkl_path, out_dir):
 
 def update_kitti_infos(pkl_path, out_dir):
     print(f'{pkl_path} will be modified.')
+    
     if out_dir in pkl_path:
         print(f'Warning, you may overwriting '
               f'the original data {pkl_path}.')
@@ -397,14 +398,17 @@ def update_kitti_infos(pkl_path, out_dir):
     # TODO update to full label
     # TODO discuss how to process 'Van', 'DontCare'
     METAINFO = {
-        'classes': ('Pedestrian', 'Cyclist', 'Car', 'Van', 'Truck',
-                    'Person_sitting', 'Tram', 'Misc'),
+        'classes': ('CAR', 'WHEELER', 'PEDESTRIAN'),
     }
+    
     print(f'Reading from input file: {pkl_path}.')
     data_list = mmengine.load(pkl_path)
+    
     print('Start updating:')
     converted_list = []
+    
     for ori_info_dict in mmengine.track_iter_progress(data_list):
+        
         temp_data_info = get_empty_standard_data_info()
 
         if 'plane' in ori_info_dict:
@@ -421,18 +425,31 @@ def update_kitti_infos(pkl_path, out_dir):
         temp_data_info['images']['CAM3']['cam2img'] = ori_info_dict['calib'][
             'P3'].tolist()
 
+        # print("Checking image path")
+        # print(ori_info_dict['image']['image_path'])
+        # tmp_lidar_path = ori_info_dict['image']['image_path']
+        # camera_type = tmp_lidar_path.split('/')[-2]
+        # camera_type = camera_type + "_reduced"
         temp_data_info['images']['CAM2']['img_path'] = Path(
-            ori_info_dict['image']['image_path']).name
+            ori_info_dict['image']['image_path'])
+        # print(temp_data_info['images']['CAM2']['img_path'])
+        
         h, w = ori_info_dict['image']['image_shape']
         temp_data_info['images']['CAM2']['height'] = h
         temp_data_info['images']['CAM2']['width'] = w
+
         temp_data_info['lidar_points']['num_pts_feats'] = ori_info_dict[
             'point_cloud']['num_features']
+        
+        # print("Checking lidar path")
+        # print(ori_info_dict['point_cloud']['velodyne_path'])
         temp_data_info['lidar_points']['lidar_path'] = Path(
-            ori_info_dict['point_cloud']['velodyne_path']).name
+            ori_info_dict['point_cloud']['velodyne_path'])
+        # print(temp_data_info['lidar_points']['lidar_path'])
 
         rect = ori_info_dict['calib']['R0_rect'].astype(np.float32)
         Trv2c = ori_info_dict['calib']['Tr_velo_to_cam'].astype(np.float32)
+        
         lidar2cam = rect @ Trv2c
         temp_data_info['images']['CAM2']['lidar2cam'] = lidar2cam.tolist()
         temp_data_info['images']['CAM0']['lidar2img'] = (

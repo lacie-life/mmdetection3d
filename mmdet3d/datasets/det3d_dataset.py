@@ -71,7 +71,7 @@ class Det3DDataset(BaseDataset):
                  data_root: Optional[str] = None,
                  ann_file: str = '',
                  metainfo: Optional[dict] = None,
-                 data_prefix: dict = dict(pts='velodyne', img=''),
+                 data_prefix: dict = dict(pts='', img=''),
                  pipeline: List[Union[dict, Callable]] = [],
                  modality: dict = dict(use_lidar=True, use_camera=False),
                  default_cam_key: str = None,
@@ -276,13 +276,18 @@ class Det3DDataset(BaseDataset):
         """
 
         if self.modality['use_lidar']:
+            # print("Checking path: ")
+            # print(info['lidar_points']['lidar_path'])
+
             info['lidar_points']['lidar_path'] = \
                 osp.join(
                     self.data_prefix.get('pts', ''),
                     info['lidar_points']['lidar_path'])
 
             info['num_pts_feats'] = info['lidar_points']['num_pts_feats']
+            
             info['lidar_path'] = info['lidar_points']['lidar_path']
+            
             if 'lidar_sweeps' in info:
                 for sweep in info['lidar_sweeps']:
                     file_suffix = sweep['lidar_points']['lidar_path'].split(
@@ -297,12 +302,17 @@ class Det3DDataset(BaseDataset):
         if self.modality['use_camera']:
             for cam_id, img_info in info['images'].items():
                 if 'img_path' in img_info:
+
+                    # print("Checking path: ")
+                    # print(img_info['img_path'])
+
                     if cam_id in self.data_prefix:
                         cam_prefix = self.data_prefix[cam_id]
                     else:
                         cam_prefix = self.data_prefix.get('img', '')
                     img_info['img_path'] = osp.join(cam_prefix,
                                                     img_info['img_path'])
+                    
             if self.default_cam_key is not None:
                 info['img_path'] = info['images'][
                     self.default_cam_key]['img_path']
